@@ -1,6 +1,6 @@
 {-# LANGUAGE BinaryLiterals #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-module RiscV.RV32I
+module RiscV.RV32IM
   ( Register(..)
   , CSRRegister(..)
   , Instr(..)
@@ -11,6 +11,7 @@ module RiscV.RV32I
   -- * Integer Register-Register Instructions
   , RegisterRegisterInstr(..)
   , ROpcode(..)
+  , MOpcode(..)
   -- * Control Transfer Instructions
   , JumpInstr(..)
   , BranchInstr(..)
@@ -195,15 +196,37 @@ data ROpcode
 instance Arbitrary ROpcode where
   arbitrary = elements [ADD, SLT, SLTU, AND, OR, XOR, SLL, SRL, SUB, SRA]
 
-data RegisterRegisterInstr =
-  RInstr !ROpcode
+data MOpcode
+  = MUL
+  | MULH
+  | MULHSU
+  | MULHU
+  | DIV
+  | DIVU
+  | REM
+  | REMU
+  deriving (Show, Eq, Ord)
+
+instance Arbitrary MOpcode where
+  arbitrary = elements [MUL, MULH, MULHSU, MULHU, DIV, DIVU, REM, REMU]
+
+data RegisterRegisterInstr
+  = RInstr !ROpcode
+         !Register
+         !Register
+         !Register
+  | MInstr !MOpcode
          !Register
          !Register
          !Register
   deriving (Show, Eq, Ord)
 
 instance Arbitrary RegisterRegisterInstr where
-  arbitrary = RInstr <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+  arbitrary = 
+    oneof
+	  [ RInstr <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+      , MInstr <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+	  ]
 
 data SyncOrdering = SyncOrd
   { deviceInput :: !Bool

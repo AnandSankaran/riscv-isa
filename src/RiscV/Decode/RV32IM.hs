@@ -1,6 +1,6 @@
 {-# LANGUAGE BinaryLiterals #-}
 {-# LANGUAGE FlexibleContexts #-}
-module RiscV.Decode.RV32I
+module RiscV.Decode.RV32IM
   ( decodeInstr
   , DecodingError(..)
   ) where
@@ -11,7 +11,7 @@ import Data.Bits
 import Data.Monoid
 import Data.Word
 import RiscV.Internal.Util
-import RiscV.RV32I
+import RiscV.RV32IM
 
 data GetState = GetState
   { pos :: !Int
@@ -169,6 +169,19 @@ decodeStoreInstr word =
     let offset = (offset5to11 `shiftL` 5) .|. offset4to0
     pure (STORE width (Word12 $ fromIntegral offset) src base)
 
+decodeMOpcode :: MonadError DecodingError m => Word32 -> m MOpcode
+decodeMOpcode threeBits =
+  case threeBits of
+    0b000 -> pure MUL
+    0b001 -> pure MULH
+    0b010 -> pure MULHSU
+    0b011 -> pure MULHU
+    0b100 -> pure DIV
+    0b101 -> pure DIVU
+    0b110 -> pure REM
+    0b111 -> pure REMU
+    _ -> throwError $ DecodingError ("Unsupported register-register opcode: " <> show threeBits)
+
 decodeROpcode :: MonadError DecodingError m => Bool -> Word32 -> m ROpcode
 decodeROpcode funct7 threeBits =
   case threeBits of
@@ -185,12 +198,21 @@ decodeROpcode funct7 threeBits =
 decodeRRInstr :: MonadError DecodingError m => Word32 -> m RegisterRegisterInstr
 decodeRRInstr word = runGetT word $ do
   let funct7 = testBit word 30
-  _ <- getNextBits 7
-  src2 <- decodeRegister <$> getNextBits 5
-  src1 <- decodeRegister <$> getNextBits 5
-  opcode <- decodeROpcode funct7 =<< getNextBits 3
-  dest <- decodeRegister <$> getNextBits 5
-  pure (RInstr opcode src2 src1 dest)
+  if (testBit word 25) -- select between M-extension and others
+    then do
+	  _ <- getNextBits 7
+	  src2 <- decodeRegister <$> getNextBits 5
+	  src1 <- decodeRegister <$> getNextBits 5
+	  opcode <- decodeMOpcode =<< getNextBits 3
+	  dest <- decodeRegister <$> getNextBits 5
+	  pure (MInstr opcode src2 src1 dest)
+	else do
+	  _ <- getNextBits 7
+	  src2 <- decodeRegister <$> getNextBits 5
+	  src1 <- decodeRegister <$> getNextBits 5
+	  opcode <- decodeROpcode funct7 =<< getNextBits 3
+	  dest <- decodeRegister <$> getNextBits 5
+	  pure (RInstr opcode src2 src1 dest)
 
 decodeIOpcode :: MonadError DecodingError m => Word32 -> m IOpcode
 decodeIOpcode threeBits =

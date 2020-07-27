@@ -1,5 +1,5 @@
 {-# LANGUAGE BinaryLiterals #-}
-module RiscV.Encode.RV32I
+module RiscV.Encode.RV32IM
   ( encodeInstr
   ) where
 
@@ -7,7 +7,7 @@ import Data.Bits
 import Data.Word
 import Prelude hiding (reads)
 import RiscV.Internal.Util
-import RiscV.RV32I
+import RiscV.RV32IM
 
 encodeInstr :: Instr -> Word32
 encodeInstr (BranchInstr branchInst) = encodeBranchInst branchInst
@@ -129,8 +129,29 @@ encodeROpcode oc =
     SRA -> 0b101
     OR -> 0b110
     AND -> 0b111
+	
+encodeMOpcode :: MOpcode -> Word32
+encodeMOpcode oc =
+  case oc of
+	MUL -> 0b000
+	MULH -> 0b001
+	MULHSU -> 0b010
+	MULHU -> 0b011
+	DIV -> 0b100
+	DIVU -> 0b101
+	REM -> 0b110
+	REMU -> 0b111
 
 encodeRegisterRegisterInstr :: RegisterRegisterInstr -> Word32
+encodeRegisterRegisterInstr (MInstr opcode src2 src1 dest) =
+  (funct7 `shiftL` 25) .|.
+  (encodeRegister src2 `shiftL` 20) .|.
+  (encodeRegister src1 `shiftL` 15) .|.
+  (encodeMOpcode opcode `shiftL` 12) .|.
+  (encodeRegister dest `shiftL` 7) .|.
+  0b0110011
+  where
+    funct7 = 0b0000001
 encodeRegisterRegisterInstr (RInstr opcode src2 src1 dest) =
   (funct7 `shiftL` 25) .|.
   (encodeRegister src2 `shiftL` 20) .|.
